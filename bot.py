@@ -1,3 +1,6 @@
+import base64
+import json
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 import gspread
@@ -6,11 +9,8 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# Токен бота
-TOKEN = "7852097643:AAHN9Yg_EhW9MR_it3lmCZScbgXW3QVZej8"
-
-# ID Google Таблицы
-SPREADSHEET_ID = "1nFAyw5XDCnuqn83yTDifxagqxsziUImqRWQIATi887g"
+# Токен бота берём из переменной окружения
+TOKEN = os.getenv("TOKEN")
 
 # Список пользователей (Telegram ID)
 USERS = [358155028]  # Твой Telegram ID
@@ -24,9 +24,12 @@ REMINDER_TIMEOUT = 600  # 10 минут
 
 # Настройка Google Таблиц
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+creds_json_base64 = os.getenv("GOOGLE_CREDENTIALS")
+creds_json = base64.b64decode(creds_json_base64).decode("utf-8")
+creds_dict = json.loads(creds_json)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+sheet = client.open_by_key(os.getenv("SPREADSHEET_ID")).sheet1
 
 # Хранилище для ожидающих ответа пользователей
 waiting_for_response = {}
