@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Токен бота берём из переменной окружения
 TOKEN = os.getenv("TOKEN")
+logging.info("Токен бота загружен из переменной окружения")
 
 # Список пользователей (Telegram ID)
 USERS = [358155028]  # Твой Telegram ID
@@ -34,16 +35,19 @@ creds_dict = json.loads(creds_json)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open_by_key(os.getenv("SPREADSHEET_ID")).sheet1
+logging.info("Подключение к Google Таблицам выполнено")
 
 # Хранилище для ожидающих ответа пользователей
 waiting_for_response = {}
 
 # Команда /start
 async def start(update: Update, context):
+    logging.info(f"Команда /start от пользователя {update.message.from_user.id}")
     await update.message.reply_text("Привет! Я бот для сбора отчётов о ямочном ремонте. Жди вопросов или используй /report для отчёта.")
 
 # Команда /report
 async def report(update: Update, context):
+    logging.info(f"Команда /report от пользователя {update.message.from_user.id}")
     try:
         end_date = datetime.now().date() - timedelta(days=1)  # Вчера
         start_date = end_date - timedelta(days=6)  # 7 дней назад
@@ -224,12 +228,14 @@ async def handle_text(update: Update, context):
 
 # Настройка планировщика
 async def post_init(application: Application):
+    logging.info("Инициализация планировщика начата")
     scheduler = AsyncIOScheduler()
 
     # Сложное расписание (время в UTC, Минск = UTC+3)
     schedules = [
-        # Понедельник 08:10 Минск (05:10 UTC): за пятницу
+        # Тест: каждые 10 секунд
         {"day": "*", "hour": "*", "minute": "*", "second": "*/10", "offset": -1, "day_index": None},
+        # Понедельник 08:10 Минск (05:10 UTC): за пятницу
         {"day": "mon", "hour": 5, "minute": 10, "offset": -3, "day_index": 0},
         # Понедельник 14:10 Минск (11:10 UTC): за понедельник
         {"day": "mon", "hour": 11, "minute": 10, "offset": 0, "day_index": None},
@@ -243,29 +249,32 @@ async def post_init(application: Application):
 
     for schedule in schedules:
         for user_id in USERS:
-            logging.info(f"Добавляю задачу для user_id={user_id}, день={schedule['day']}, время={schedule['hour']}:{schedule['minute']} UTC, offset={schedule['offset']}")
+            second = schedule.get("second", 0)  # Учитываем поле second из расписания
+            logging.info(f"Добавляю задачу для user_id={user_id}, день={schedule['day']}, время={schedule['hour']}:{schedule['minute']}:{second} UTC, offset={schedule['offset']}")
             scheduler.add_job(
                 send_questions,
                 trigger=CronTrigger(
                     day_of_week=schedule["day"],
                     hour=schedule["hour"],
                     minute=schedule["minute"],
-                    second=0,  # Добавляем поддержку second
+                    second=second,  # Теперь second берётся из расписания
                     timezone="UTC"
                 ),
                 args=[application, schedule["offset"], user_id, schedule["day_index"]]
             )
 
     scheduler.start()
-    logging.info("Планировщик запущен")
+    logging.info("Планировщик успешно запущен")
 
 def main():
+    logging.info("Запуск бота начат")
     app = Application.builder().token(TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CallbackQueryHandler(handle_response))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     print("Бот запущен...")
+    logging.info("Бот успешно запущен, начинаю polling")
     app.run_polling()
 
 if __name__ == "__main__":
