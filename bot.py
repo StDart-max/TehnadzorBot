@@ -233,14 +233,12 @@ async def post_init(application: Application):
 
     # Сложное расписание (время в UTC, Минск = UTC+3)
     schedules = [
-        # Тест: каждые 10 секунд
-        {"day": "*", "hour": "*", "minute": "*", "second": "*/10", "offset": -1, "day_index": None},
         # Понедельник 08:10 Минск (05:10 UTC): за пятницу
         {"day": "mon", "hour": 5, "minute": 10, "offset": -3, "day_index": 0},
         # Понедельник 14:10 Минск (11:10 UTC): за понедельник
         {"day": "mon", "hour": 11, "minute": 10, "offset": 0, "day_index": None},
         # Среда 15:30 Минск (12:30 UTC): за вторник
-        {"day": "wed", "hour": 12, "minute": 30, "offset": -1, "day_index": None},
+        {"day": "wed", "hour": 5, "minute": 10, "offset": -1, "day_index": None},
         # Четверг 08:10 Минск (05:10 UTC): за среду
         {"day": "thu", "hour": 5, "minute": 10, "offset": -1, "day_index": None},
         # Пятница 08:10 Минск (05:10 UTC): за четверг
