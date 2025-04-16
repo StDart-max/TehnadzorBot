@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 import gspread
@@ -8,6 +9,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Токен бота берём из переменной окружения
 TOKEN = os.getenv("TOKEN")
@@ -80,7 +84,11 @@ async def report(update: Update, context):
         await update.message.reply_text(f"Ошибка при получении отчёта: {e}")
 
 # Функция для отправки вопросов
-async def send_questions(application: Application, report_date: str, user_id: int, day_index: int = None):
+async def send_questions(application: Application, offset: int, user_id: int, day_index: int = None):
+    # Динамически вычисляем дату на момент выполнения задачи
+    report_date = (datetime.now() + timedelta(days=offset)).strftime("%d.%m.%Y")
+    logging.info(f"Функция send_questions запущена для user_id={user_id}, report_date={report_date}, day_index={day_index}")
+    
     question = f"Выполняли ли вы ямочный ремонт {report_date}?"
     
     waiting_for_response[user_id] = {"date": report_date, "step": "initial", "day_index": day_index}
@@ -100,6 +108,8 @@ async def send_questions(application: Application, report_date: str, user_id: in
     application.job_queue.run_once(
         notify_admin, QUESTION_TIMEOUT, data=user_id, name=f"notify_{user_id}"
     )
+    
+    logging.info(f"Сообщение отправлено пользователю {user_id}")
 
 # Напоминание пользователю
 async def remind_user(context):
@@ -219,10 +229,11 @@ async def post_init(application: Application):
     # Сложное расписание (время в UTC, Минск = UTC+3)
     schedules = [
         # Понедельник 08:10 Минск (05:10 UTC): за пятницу
+        {"day": "*", "hour": "*", "minute": "*", "second": "*/10", "offset": -1, "day_index": None},
         {"day": "mon", "hour": 5, "minute": 10, "offset": -3, "day_index": 0},
         # Понедельник 14:10 Минск (11:10 UTC): за понедельник
         {"day": "mon", "hour": 11, "minute": 10, "offset": 0, "day_index": None},
-        # Среда 08:10 Минск (05:10 UTC): за вторник
+        # Среда 15:30 Минск (12:30 UTC): за вторник
         {"day": "wed", "hour": 12, "minute": 30, "offset": -1, "day_index": None},
         # Четверг 08:10 Минск (05:10 UTC): за среду
         {"day": "thu", "hour": 5, "minute": 10, "offset": -1, "day_index": None},
@@ -231,35 +242,22 @@ async def post_init(application: Application):
     ]
 
     for schedule in schedules:
-        report_date = (datetime.now() + timedelta(days=schedule["offset"])).strftime("%d.%m.%Y")
-        if schedule["day"] == "mon" and schedule["offset"] == -3:
-            # Только первый вопрос (за пятницу) запускается по расписанию
-            for user_id in USERS:
-                scheduler.add_job(
-                    send_questions,
-                    trigger=CronTrigger(
-                        day_of_week=schedule["day"],
-                        hour=schedule["hour"],
-                        minute=schedule["minute"],
-                        timezone="UTC"
-                    ),
-                    args=[application, report_date, user_id, schedule["day_index"]]
-                )
-        else:
-            # Остальные вопросы (не для понедельника 08:10)
-            for user_id in USERS:
-                scheduler.add_job(
-                    send_questions,
-                    trigger=CronTrigger(
-                        day_of_week=schedule["day"],
-                        hour=schedule["hour"],
-                        minute=schedule["minute"],
-                        timezone="UTC"
-                    ),
-                    args=[application, report_date, user_id, schedule["day_index"]]
-                )
+        for user_id in USERS:
+            logging.info(f"Добавляю задачу для user_id={user_id}, день={schedule['day']}, время={schedule['hour']}:{schedule['minute']} UTC, offset={schedule['offset']}")
+            scheduler.add_job(
+                send_questions,
+                trigger=CronTrigger(
+                    day_of_week=schedule["day"],
+                    hour=schedule["hour"],
+                    minute=schedule["minute"],
+                    second=0,  # Добавляем поддержку second
+                    timezone="UTC"
+                ),
+                args=[application, schedule["offset"], user_id, schedule["day_index"]]
+            )
 
     scheduler.start()
+    logging.info("Планировщик запущен")
 
 def main():
     app = Application.builder().token(TOKEN).post_init(post_init).build()
