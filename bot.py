@@ -238,7 +238,7 @@ async def post_init(application: Application):
         # Понедельник 14:10 Минск (11:10 UTC): за понедельник
         {"day": "mon", "hour": 11, "minute": 10, "offset": 0, "day_index": None},
         # Среда 15:30 Минск (12:30 UTC): за вторник
-        {"day": "wed", "hour": 5, "minute": 10, "offset": -1, "day_index": None},
+        {"day": "wed", "hour": 12, "minute": 30, "offset": -1, "day_index": None},
         # Четверг 08:10 Минск (05:10 UTC): за среду
         {"day": "thu", "hour": 5, "minute": 10, "offset": -1, "day_index": None},
         # Пятница 08:10 Минск (05:10 UTC): за четверг
@@ -255,7 +255,7 @@ async def post_init(application: Application):
                     day_of_week=schedule["day"],
                     hour=schedule["hour"],
                     minute=schedule["minute"],
-                    second=second,  # Теперь second берётся из расписания
+                    second=second,
                     timezone="UTC"
                 ),
                 args=[application, schedule["offset"], user_id, schedule["day_index"]]
